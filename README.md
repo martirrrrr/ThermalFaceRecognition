@@ -1,4 +1,4 @@
-# ThermalFaceRecognition
+# Thermal Face Recognition
 Face Recognition system based on custom ResNet for thermal images, involving the dataset of Visual Pairs provided by SpeakingFaces available at https://github.com/IS2AI/SpeakingFaces.
 
 ## DATASET
