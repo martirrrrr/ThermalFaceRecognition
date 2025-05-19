@@ -8,8 +8,7 @@ Then we can split the dataset into train-test-val according to 70-20-10, keeping
 ```python split.py```
 
 ```python split.py```
-
-## HOW TO USE
+The organization must be the following.
 ```
 dataset_split/
 ├── train/
@@ -36,6 +35,21 @@ dataset_split/
     │   ├── 2_1_17.png
     │   └── ...
     └── ...
+train.py
+test_fr.py
+split.py
+create_subdir.py
+best_thermal_model2.pth
+```
+## HOW TO USE
+Run training file train.py or test test_fr.py
+### Train
+```
+python train.py
+```
+### Test
+```
+python test_fr.py
 ```
 
 ## NETWORK DETAILS
