@@ -57,7 +57,7 @@ The implemented neural network is a simplified architecture inspired by ResNet18
 Compared to the standard ResNet architecture, some simplifications have been adopted to reduce computational complexity and adapt the model to the available dataset. In particular:
 - The input images are in grayscale (1 channel) and small in size (112×112 pixels).
 
-- The network uses BasicBlock blocks without a bottleneck architecture, and a limited number of residual blocks.
+- The network uses BasicBlock blocks without a bottleneck architecture, and a limited number of residual blocks (3).
 
 - The output was adapted to 142 classes of SpeakingFaces individuals.
 
