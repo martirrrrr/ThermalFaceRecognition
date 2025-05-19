@@ -103,3 +103,5 @@ CustomResNet                             [32, 142]                 --
 ├─Linear: 1-8                       [32, 142]                 36,494
 
 ```
+Auto generated figure of the network.
+![Model](images/architecture.png)
