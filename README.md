@@ -51,6 +51,21 @@ python test_fr.py
 ```
 
 ## NETWORK DETAILS
+The implemented neural network is a simplified architecture inspired by ResNet18, composed of an initial convolution layer followed by three residual layers (each layer contains two BasicBlock blocks), each of which learns increasingly abstract representations of input data. The network works on grayscale images sized to 112×112 and uses initial max pooling, followed by Adaptive Average Pooling and a fully connected final for classification into 142 classes. Residual blocks allow the flow of gradients during backpropagation, improving trainability even on deep nets.
+
+### Simplification adopted
+Compared to the standard ResNet architecture, some simplifications have been adopted to reduce computational complexity and adapt the model to the available dataset. In particular:
+- The input images are in grayscale (1 channel) and small in size (112×112 pixels).
+
+- The network uses BasicBlock blocks without a bottleneck architecture, and a limited number of residual blocks.
+
+- The output was adapted to 142 classes of SpeakingFaces individuals.
+
+- The data augmentation was kept simple, including only horizontal flips and slight rotations.
+
+These choices allow greater efficiency while maintaining sufficient expressive capacity for the proposed classification task.
+
+
 Reproducible via summary.py.
 ```
 ==========================================================================================
