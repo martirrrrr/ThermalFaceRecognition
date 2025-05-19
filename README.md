@@ -6,8 +6,6 @@ Download the SpeakingFaces dataset and organize folders as shown below. For each
 ```python create_subdir.py```
 Then we can split the dataset into train-test-val according to 70-20-10, keeping the datafolders organization.
 ```python split.py```
-
-```python split.py```
 The organization must be the following.
 ```
 dataset_split/
@@ -45,7 +43,7 @@ best_thermal_model2.pth
 Run training file train.py or test test_fr.py
 ### Train
 ```
-python train.py
+python train_fr.py
 ```
 ### Test
 ```
