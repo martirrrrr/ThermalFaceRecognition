@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
-import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from torchvision import transforms
+from face_dataset import FaceDetectionDataset
 from collections import Counter
-import torchvision
-import numpy as np
-
 import torch.nn.functional as F
+from sklearn.preprocessing import LabelEncoder
+import json
+import time
+import matplotlib.pyplot as plt
 
-
+# === RESNET CUSTOM ===
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
         super(BasicBlock, self).__init__()
@@ -31,36 +31,24 @@ class BasicBlock(nn.Module):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
-        out = F.relu(out)
-        return out
-
+        return F.relu(out)
 
 class CustomResNet(nn.Module):
     def __init__(self, num_classes):
         super(CustomResNet, self).__init__()
-        # Input
         self.in_channels = 64
-
-        # Conv1 per estrazione pattern basilari
         self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
-        # MaxPooling 3x3 per ridurre dim
         self.pool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-
-        # Layer 1 di due blocchi residuali (2 conv. 3x3 + BatchNorm + Shortcut)
         self.layer1 = self._make_layer(64, 2, stride=1)
-        # Layer 2 di due blocchi residuali
         self.layer2 = self._make_layer(128, 2, stride=2)
-        # Layer 3 di due blocchi residuali
         self.layer3 = self._make_layer(256, 2, stride=2)
-        # (estrae features sempre più astratte)
-        # Adaptive avg pooling ()
+        # Layer 4 not implemented (compact resnet)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        # Fully connected layer Nx142 numero di classi)
         self.fc = nn.Linear(256, num_classes)
 
     def _make_layer(self, out_channels, blocks, stride):
-        # Lista di stride per blocchi
+        # Building of residual blocks (1-3) 
         strides = [stride] + [1] * (blocks - 1)
         layers = []
         for s in strides:
@@ -75,35 +63,27 @@ class CustomResNet(nn.Module):
         out = self.layer2(out)
         out = self.layer3(out)
         out = self.avgpool(out)
-        # Vettorializzazione
         out = torch.flatten(out, 1)
-        out = self.fc(out)
-        return out
+        return self.fc(out)
 
-# === TRAINING & VALUTAZIONE ===
+# === TRAINING ===
 def train(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss, total_correct = 0, 0
-
     for images, labels in dataloader:
         images, labels = images.to(device), labels.to(device)
         optimizer.zero_grad()
-        outputs = model(images) # fwd
-        loss = criterion(outputs, labels) #loss
-        loss.backward() #calcolo grad
-        optimizer.step() #upd
-
-        total_loss += loss.item() * images.size(0) #weighted loss
+        outputs = model(images)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * images.size(0)
         total_correct += (outputs.argmax(1) == labels).sum().item()
-
-    avg_loss = total_loss / len(dataloader.dataset)
-    accuracy = total_correct / len(dataloader.dataset) * 100
-    return avg_loss, accuracy
+    return total_loss / len(dataloader.dataset), total_correct / len(dataloader.dataset) * 100
 
 def evaluate(model, dataloader, criterion, device):
     model.eval()
     total_loss, total_correct = 0, 0
-
     with torch.no_grad():
         for images, labels in dataloader:
             images, labels = images.to(device), labels.to(device)
@@ -111,70 +91,148 @@ def evaluate(model, dataloader, criterion, device):
             loss = criterion(outputs, labels)
             total_loss += loss.item() * images.size(0)
             total_correct += (outputs.argmax(1) == labels).sum().item()
-
-    avg_loss = total_loss / len(dataloader.dataset)
-    accuracy = total_correct / len(dataloader.dataset) * 100
-    return avg_loss, accuracy
+    return total_loss / len(dataloader.dataset), total_correct / len(dataloader.dataset) * 100
 
 # === MAIN ===
 if __name__ == '__main__':
-    # Trasformazioni TRAINING
+    # Transforms + Normalization + Data Augmentation
     transform_train = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1), #BW (già in grayscale per GRAU, ma se passi Iron serve)
-        transforms.Resize((112, 112)), # resizing
-        transforms.RandomHorizontalFlip(), #data augm con flipping orizz
-        transforms.RandomRotation(5), # data augm con rotazioni fino a +-5 degrees
-        transforms.ToTensor(),  # tensorializzazione senza Normalize (transforms.Normalize(mean=[0.5], std=[0.5])  # se gray
+        transforms.Resize((112, 112)),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(5),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
     ])
-    # Trasformazioni TEST E VAL
     transform_test = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1), # BW
-        transforms.Resize((112, 112)), # resizing
-        transforms.ToTensor(), #tensorializzazione
-        # NO data augmentation per gli altri set
+        transforms.Resize((112, 112)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
     ])
 
-    # Dataset split
-    train_ds = datasets.ImageFolder('dataset_merged_split/train', transform=transform_train)
-    val_ds = datasets.ImageFolder('dataset_merged_split/val', transform=transform_test)
-    test_ds = datasets.ImageFolder('dataset_merged_split/test', transform=transform_test)
+    # LabelEncoder globale
+    all_labels = []
+    for split in ['train', 'val', 'test']:
+        with open(f'dataset_merged_split/{split}/{split}_bb.txt') as f:
+            all_labels += [line.strip().split()[0].split("/")[-2] for line in f]
+    label_encoder = LabelEncoder()
+    label_encoder.fit(all_labels)
 
-    # Distributions
-    print("Classes:", train_ds.classes)
-    print("Training distribution:", Counter(train_ds.targets))
+    # Datasets + Loaders
+    train_ds = FaceDetectionDataset('dataset_merged_split/train.jsonl', root_dir='dataset_merged_split/train', transform=transform_train, label_encoder=label_encoder)
+    val_ds = FaceDetectionDataset('dataset_merged_split/val.jsonl', root_dir='dataset_merged_split/val', transform=transform_test, label_encoder=label_encoder)
+    test_ds = FaceDetectionDataset('dataset_merged_split/test.jsonl', root_dir='dataset_merged_split/test', transform=transform_test, label_encoder=label_encoder)
 
-    # LOADERS
+    print("Classes:", list(label_encoder.classes_))
+    print("Train distribution:", Counter([lbl for _, lbl in train_ds]))
+
     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=32, shuffle=False)
     test_loader = DataLoader(test_ds, batch_size=32, shuffle=False)
 
-    # Devices
+    # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = CustomResNet(num_classes=len(train_ds.classes)).to(device)
+    model = CustomResNet(num_classes=len(label_encoder.classes_)).to(device)
 
-    # Loss + Optim
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.0005)
 
-    #show_some_images(train_ds)
-
+    # Best model values
     best_val_acc = 0
-    # 20 epochs
+    train_accuracies, val_accuracies = [], []
+    train_losses =  []
+    val_losses = []
+
+    epoch_times = []
+    train_times = []
+    val_times = []
+
+    # Training epochs=20
     for epoch in range(1, 21):
-        # Train
+        start_epoch = time.time()
+
+        start_train = time.time()
         train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
-        # Val
+        end_train = time.time()
+
+        start_val = time.time()
         val_loss, val_acc = evaluate(model, val_loader, criterion, device)
+        end_val = time.time()
+
+        end_epoch = time.time()
+
+        train_accuracies.append(train_acc)
+        val_accuracies.append(val_acc)
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
+        epoch_time = end_epoch - start_epoch
+        train_time = end_train - start_train
+        val_time = end_val - start_val
+
+        epoch_times.append(epoch_time)
+        train_times.append(train_time)
+        val_times.append(val_time)
+
         print(f"Epoch {epoch}: Train Acc {train_acc:.2f}%, Val Acc {val_acc:.2f}%")
+        print(f"Training time: {train_time:.2f}s | Validation time: {val_time:.2f}s | Epoch time: {epoch_time:.2f}s")
 
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            # Best model
-            torch.save(model.state_dict(), 'best_thermal_model2.pth')
+            torch.save(model.state_dict(), 'best_model_2.pth')
             print("Best model saved.")
 
-    # Test
+    start_test = time.time()
     test_loss, test_acc = evaluate(model, test_loader, criterion, device)
-    print(f"\n🎯 Test Accuracy: {test_acc:.2f}%")
+    end_test = time.time()
+    test_time = end_test - start_test
+    print(f"\n Test Accuracy: {test_acc:.2f}%")
+    print(f" Test evaluation time: {test_time:.2f}s")
 
-    #show_confusion(model, val_loader, device, train_ds.classes)
+    # Save metrics
+    metrics = {
+        "train_acc": train_accuracies,
+        "val_acc": val_accuracies,
+        "train_loss": train_losses,
+        "val_loss": val_losses
+    }
+    with open("training_metrics.json", "w") as f:
+        json.dump(metrics, f)
+
+    timing_metrics = {
+        "epoch_times": epoch_times,
+        "train_times": train_times,
+        "val_times": val_times,
+        "test_time": test_time
+    }
+    with open("timing_metrics.json", "w") as f:
+        json.dump(timing_metrics, f)
+
+    # Plotting
+    epochs = list(range(1, len(train_accuracies) + 1))
+
+    # Accuracy plot
+    plt.figure(figsize=(10, 4))
+    plt.plot(epochs, train_accuracies, label="Train Accuracy")
+    plt.plot(epochs, val_accuracies, label="Val Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+    plt.title("Accuracy per Epoch")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("accuracy_plot.png")
+    plt.show()
+
+    # Loss plot
+    plt.figure(figsize=(10, 4))
+    plt.plot(epochs, train_losses, label="Train Loss")
+    plt.plot(epochs, val_losses, label="Val Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Loss per Epoch")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("loss_plot.png")
+    plt.show()
+
