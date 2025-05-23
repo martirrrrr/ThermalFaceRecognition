@@ -1,58 +1,76 @@
+import json
+import os
 import torch
-from torch.utils.data import DataLoader
-from torchvision import datasets, transforms
 import torch.nn.functional as F
 import pandas as pd
-import time
-import os
 import numpy as np
-from collections import Counter
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, f1_score, precision_score, recall_score
 import matplotlib.pyplot as plt
-
-from train2 import CustomResNet  # o modifica in base al nome del file
+import seaborn as sns
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
+from face_dataset import FaceDetectionDataset
+from train import CustomResNet  # import your trained model class
+from sklearn.preprocessing import LabelEncoder
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 32
-MODEL_PATH = 'best_thermal_model2.pth'
+MODEL_PATH = 'best_model.pth'
 
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+from sklearn.metrics import confusion_matrix
 
-def save_results_with_filenames(test_ds, true_labels, preds, output_path="test_results.csv"):
-    """
-    Salva CSV con colonne: filename, ground_truth, prediction
+# Plot of confusion matrix - some arrangements are done for correct displaying of the matrix 142x142
+def plot_compact_confusion_matrix(y_true, y_pred, class_names, normalize=True, figsize=(18, 14), dpi=100):
+    cm = confusion_matrix(y_true, y_pred)
 
-    Args:
-        test_ds: dataset ImageFolder
-        true_labels: lista/array delle etichette vere (indici)
-        preds: lista/array delle predizioni (indici)
-        output_path: percorso file CSV di output
-    """
-    # Estraggo solo il nome file (ultimo pezzo del path) da test_ds.samples
-    filenames = [os.path.basename(sample[0]) for sample in test_ds.samples]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1, keepdims=True)
+        cm = np.nan_to_num(cm)  # in caso di divisione per zero
+        fmt = ".2f"
+        title = "Normalized Confusion Matrix"
+    else:
+        fmt = "d"
+        title = "Confusion Matrix"
 
-    assert len(filenames) == len(true_labels) == len(preds), "Dimensioni non corrispondono"
+    plt.figure(figsize=figsize, dpi=dpi)
+    sns.heatmap(cm, cmap="Blues", xticklabels=False, yticklabels=False, cbar=True)
 
-    df = pd.DataFrame({
-        "filename": filenames,
-        "ground_truth": true_labels,
-        "prediction": preds
-    })
-    df.to_csv(output_path, index=False)
-    print(f"Risultati salvati in '{output_path}'")
+    plt.title(title)
+    plt.xlabel("Predicted Labels")
+    plt.ylabel("True Labels")
+    plt.tight_layout()
+    plt.show()
 
+# Loading data (images, json)
 def load_data():
     transform_test = transforms.Compose([
-        transforms.Grayscale(num_output_channels=1),
         transforms.Resize((112, 112)),
         transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5])
     ])
-    test_ds = datasets.ImageFolder('dataset_merged_split/test', transform=transform_test)
+
+    all_labels = []
+    with open("dataset_merged_split/test.jsonl") as f:
+        for line in f:
+            label = json.loads(line)["annotations"][0]["label"]
+            all_labels.append(label)
+
+    label_encoder = LabelEncoder()
+    label_encoder.fit(all_labels)
+
+    test_ds = FaceDetectionDataset(
+        jsonl_file="dataset_merged_split/test.jsonl",
+        root_dir="dataset_merged_split/test",
+        transform=transform_test,
+        label_encoder=label_encoder
+    )
     test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False)
-    print("Classi test:", test_ds.classes)
-    print("Distribuzione test:", Counter(test_ds.targets))
-    return test_ds, test_loader
+    return test_ds, test_loader, label_encoder
 
-
+# Load model CustomResnet
 def load_model(num_classes):
     model = CustomResNet(num_classes=num_classes)
     model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
@@ -60,11 +78,9 @@ def load_model(num_classes):
     model.eval()
     return model
 
-
+# Predict (logits and softmax)
 def get_predictions(model, test_loader):
-    all_preds = []
-    all_labels = []
-    all_probs = []
+    all_preds, all_labels, all_probs = [], [], []
     with torch.no_grad():
         for images, labels in test_loader:
             images, labels = images.to(DEVICE), labels.to(DEVICE)
@@ -77,174 +93,78 @@ def get_predictions(model, test_loader):
             all_probs.extend(probs.cpu().numpy())
     return np.array(all_labels), np.array(all_preds), np.array(all_probs)
 
+# CSV save of results
+def save_results_with_filenames(test_ds, true_labels, preds, label_encoder, output_path="test_results.csv"):
+    filenames = [os.path.basename(p) for (p, _, _) in test_ds.entries]
+    decoded_gt = label_encoder.inverse_transform(true_labels)
+    decoded_preds = label_encoder.inverse_transform(preds)
 
-def print_basic_metrics(true_labels, preds):
-    accuracy = accuracy_score(true_labels, preds)
-    precision_macro = precision_score(true_labels, preds, average='macro', zero_division=0)
-    recall_macro = recall_score(true_labels, preds, average='macro', zero_division=0)
-    f1_macro = f1_score(true_labels, preds, average='macro', zero_division=0)
-
-    precision_micro = precision_score(true_labels, preds, average='micro', zero_division=0)
-    recall_micro = recall_score(true_labels, preds, average='micro', zero_division=0)
-    f1_micro = f1_score(true_labels, preds, average='micro', zero_division=0)
-
-    print(f"Test Accuracy: {accuracy:.4f}")
-    print(f"Test Precision (macro): {precision_macro:.4f}")
-    print(f"Test Recall (macro): {recall_macro:.4f}")
-    print(f"Test F1 Score (macro): {f1_macro:.4f}")
-    print(f"Test Precision (micro): {precision_micro:.4f}")
-    print(f"Test Recall (micro): {recall_micro:.4f}")
-    print(f"Test F1 Score (micro): {f1_micro:.4f}")
-
-
-def print_classification_report(true_labels, preds, class_names):
-    print("\nClassification Report:")
-    print(classification_report(true_labels, preds, target_names=class_names, zero_division=0))
-
-
-def print_label_distribution(true_labels, preds, class_names):
-    print("\nDistribuzione delle etichette vere:", Counter(true_labels))
-    print("Distribuzione delle predizioni:", Counter(preds))
-    print("\nSupport (numero di esempi per classe):")
-    support = Counter(true_labels)
-    for cls, count in support.items():
-        print(f"{class_names[cls]}: {count}")
-
-
-def save_predictions_csv(true_labels, preds, probs, class_names, filename="test_predictions.csv"):
     df = pd.DataFrame({
-        "true_label": true_labels,
-        "pred_label": preds,
+        "filename": filenames,
+        "ground_truth": decoded_gt,
+        "prediction": decoded_preds
     })
+    df.to_csv(output_path, index=False)
+    print(f"Results saved to '{output_path}'")
 
-    for i, class_name in enumerate(class_names):
-        df[f'prob_{class_name}'] = probs[:, i]
+# Display metrics values (accuracy, precision, recall, f1)
+def print_metrics(true_labels, preds, label_encoder):
+    decoded_gt = label_encoder.inverse_transform(true_labels)
+    decoded_preds = label_encoder.inverse_transform(preds)
 
-    df.to_csv(filename, index=False)
-    print(f"\nPredizioni salvate in {os.path.abspath(filename)}")
+    print("Accuracy:", accuracy_score(decoded_gt, decoded_preds))
+    print("Precision (macro):", precision_score(decoded_gt, decoded_preds, average='macro'))
+    print("Recall (macro):", recall_score(decoded_gt, decoded_preds, average='macro'))
+    print("F1 Score (macro):", f1_score(decoded_gt, decoded_preds, average='macro'))
+    print("\nClassification Report:\n")
+    print(classification_report(decoded_gt, decoded_preds, zero_division=0))
 
-
-def show_misclassified_images(test_ds, true_labels, preds, class_names, max_images=5):
-    wrong_indices = [i for i, (t, p) in enumerate(zip(true_labels, preds)) if t != p]
-
-    def imshow(img, title=None):
-        img = img.squeeze(0)  # 1 channel
-        plt.imshow(img, cmap='gray')
-        if title:
-            plt.title(title)
-        plt.axis('off')
-
-    fig = plt.figure(figsize=(12, 6))
-    for idx, wrong_i in enumerate(wrong_indices[:max_images]):
-        img, true_label = test_ds[wrong_i]
-        pred_label = preds[wrong_i]
-
-        ax = fig.add_subplot(1, max_images, idx + 1)
-        imshow(img, title=f"True: {class_names[true_label]}\nPred: {class_names[pred_label]}")
-    plt.show()
-
-
-def measure_inference_time(model, test_loader):
-    model.eval()
-    start = time.time()
-    with torch.no_grad():
-        for images, _ in test_loader:
-            images = images.to(DEVICE)
-            outputs = model(images)
-    end = time.time()
-
-    total_images = len(test_loader.dataset)
-    time_per_image = (end - start) / total_images
-    print(f"\nTempo medio inferenza per immagine: {time_per_image * 1000:.2f} ms")
-
-
-def stampa_distribuzioni(y_true, y_pred):
-    print("Distribuzione etichette vere:", Counter(y_true))
-    print("Distribuzione predizioni:", Counter(y_pred))
-
-
-def plot_confusion_matrix(y_true, y_pred, class_names=None, figsize=(12, 10), normalize=False):
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    from sklearn.metrics import confusion_matrix
-
-    # Se non passo class_names, li calcolo dalle etichette vere + predette
-    if class_names is None:
-        class_names = sorted(list(set(y_true) | set(y_pred)))
-
-    cm = confusion_matrix(y_true, y_pred, labels=class_names)
-
+def plot_conf_matrix(true_labels, preds, class_names, normalize=False):
+    cm = confusion_matrix(true_labels, preds)
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-        title = 'Matrice di confusione normalizzata'
-    else:
-        title = 'Matrice di confusione'
-
-    plt.figure(figsize=figsize)
-    sns.heatmap(cm, annot=False, fmt='.2f' if normalize else 'd', cmap='Blues',
-                xticklabels=class_names, yticklabels=class_names)
-    plt.xlabel('Predizioni')
-    plt.ylabel('Etichette vere')
-    plt.title(title)
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(cm, annot=False, fmt='.2f' if normalize else 'd', cmap='Blues', xticklabels=class_names, yticklabels=class_names)
+    plt.title('Normalized Confusion Matrix' if normalize else 'Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
     plt.show()
 
-def metriche_globali(y_true, y_pred):
-    acc = accuracy_score(y_true, y_pred)
-    f1_macro = f1_score(y_true, y_pred, average='macro')
-    f1_micro = f1_score(y_true, y_pred, average='micro')
-    precision_macro = precision_score(y_true, y_pred, average='macro', zero_division=0)
-    recall_macro = recall_score(y_true, y_pred, average='macro', zero_division=0)
-    print(f"Accuracy: {acc:.4f}")
-    print(f"F1 score macro: {f1_macro:.4f}")
-    print(f"F1 score micro: {f1_micro:.4f}")
-    print(f"Precision macro: {precision_macro:.4f}")
-    print(f"Recall macro: {recall_macro:.4f}")
-
-def report_classi(y_true, y_pred):
-    print("Report dettagliato per classe:")
-    print(classification_report(y_true, y_pred, zero_division=0))
-
-def plot_errore_distribution(y_true, y_pred):
-    error_indices = np.where(y_true != y_pred)[0]
-    error_counts = Counter(y_pred[error_indices])
-    plt.figure(figsize=(12,6))
-    plt.bar(error_counts.keys(), error_counts.values())
-    plt.xlabel("Classe predetta (errata)")
-    plt.ylabel("Numero di errori")
-    plt.title("Distribuzione degli errori di classificazione per classe predetta")
+# Focus on misclassified samples of testing set
+def show_misclassified(test_ds, true_labels, preds, class_names, max_images=5):
+    wrong_idxs = [i for i, (t, p) in enumerate(zip(true_labels, preds)) if t != p]
+    fig = plt.figure(figsize=(12, 6))
+    for idx, wrong_i in enumerate(wrong_idxs[:max_images]):
+        img, true_lbl = test_ds[wrong_i]
+        pred_lbl = preds[wrong_i]
+        ax = fig.add_subplot(1, max_images, idx + 1)
+        img = img.squeeze(0).numpy()
+        plt.imshow(img, cmap='gray')
+        ax.set_title(f"True: {class_names[true_lbl]}\nPred: {class_names[pred_lbl]}")
+        plt.axis('off')
     plt.show()
 
+# Read CSV and pprint misclassified
+def show_misclassified_from_csv(csv_path, max_samples=10):
+    df = pd.read_csv(csv_path)
+    if 'ground_truth' not in df.columns or 'prediction' not in df.columns:
+        raise ValueError("CSV must contain 'ground_truth' and 'prediction' columns.")
+    misclassified = df[df['ground_truth'] != df['prediction']]
+    print(f"\nFound {len(misclassified)} misclassified samples. Showing up to {max_samples}:\n")
+    #misclassified.to_csv("misclassified_samples.csv")
+    print(misclassified.head(max_samples))
 
-if __name__ == '__main__':
-    test_ds, test_loader = load_data()
-    model = load_model(num_classes=len(test_ds.classes))
+def main():
+    test_ds, test_loader, label_encoder = load_data()
+    model = load_model(num_classes=len(label_encoder.classes_))
     true_labels, preds, probs = get_predictions(model, test_loader)
 
-    # Attiva/disattiva le funzioni qui:
-    print_basic_metrics(true_labels, preds)
-    print_classification_report(true_labels, preds, test_ds.classes)
-    print_label_distribution(true_labels, preds, test_ds.classes)
-    save_predictions_csv(true_labels, preds, probs, test_ds.classes)
-    show_misclassified_images(test_ds, true_labels, preds, test_ds.classes)
-    measure_inference_time(model, test_loader)
-    print("---cose nuove---")
-    # 1) Visualizza distribuzione dati
-    stampa_distribuzioni(true_labels, preds)
+    save_results_with_filenames(test_ds, true_labels, preds, label_encoder)
+    print_metrics(true_labels, preds, label_encoder)
+    plot_conf_matrix(true_labels, preds, label_encoder.classes_, normalize=True)
+    show_misclassified(test_ds, true_labels, preds, label_encoder.classes_)
+    plot_compact_confusion_matrix(true_labels, preds,label_encoder.classes_,normalize=True )
+    show_misclassified_from_csv("test_results.csv", max_samples=67)
 
-    # 2) Matrice di confusione (non normalizzata)
-    plot_confusion_matrix(true_labels, preds)
-
-    # 3) Matrice di confusione normalizzata (valori da 0 a 1 per ogni riga)
-    plot_confusion_matrix(true_labels, preds, normalize=True)
-
-    # 4) Metriche globali di valutazione
-    metriche_globali(true_labels, preds)
-
-    # 5) Report dettagliato per classe (precision, recall, F1 per ogni classe)
-    report_classi(true_labels, preds)
-
-    # 6) Grafico distribuzione errori (classi più predette erroneamente)
-    plot_errore_distribution(np.array(true_labels), np.array(preds))
-
-    save_results_with_filenames(test_ds, true_labels, preds, output_path="test_results_with_filenames.csv")
+if __name__ == '__main__':
+    main()
