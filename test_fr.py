@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
 from face_dataset import FaceDetectionDataset
-from train import CustomResNet  # import your trained model class
+from train import CustomResNet
 from sklearn.preprocessing import LabelEncoder
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -22,7 +22,7 @@ import seaborn as sns
 import numpy as np
 from sklearn.metrics import confusion_matrix
 
-# Plot of confusion matrix - some arrangements are done for correct displaying of the matrix 142x142
+# Plot of confusion matrix 142x142
 def plot_compact_confusion_matrix(y_true, y_pred, class_names, normalize=True, figsize=(18, 14), dpi=100):
     cm = confusion_matrix(y_true, y_pred)
 
