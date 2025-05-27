@@ -15,7 +15,7 @@ class ThermalGrayTransform:
         ])
 
     def __call__(self, img):
-        img = img.convert("L")  # assicurati grayscale
+        img = img.convert("L")  # grayscale
         return self.transform(img)
 
 # === DUAL DATALOADER CUSTOM ===
