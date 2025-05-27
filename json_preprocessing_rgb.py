@@ -2,13 +2,13 @@ import os
 import json
 import shutil
 
-# Cartella con tutti i file rgb sparsi
+# RGB files 
 rgb_source_folder = 'rgb/'
 
-# Cartella root dove creare la struttura ordinata
+# Destination folder
 rgb_target_root = 'dataset_merged_split_rgb'
 
-# JSONL termici da leggere
+# JSONL thermal files 
 jsonl_files = {
     'train': 'dataset_merged_split/train.jsonl',
     'val': 'dataset_merged_split/val.jsonl',
@@ -21,25 +21,25 @@ def organize_rgb():
         with open(jsonl_path, 'r') as f:
             for line in f:
                 entry = json.loads(line)
-                term_img_path = entry['image']  # esempio: dataset_merged_split/train/135/135_2_2_1_202_109_1.png
-                filename = os.path.basename(term_img_path)  # es 135_2_2_1_202_109_1.png
+                term_img_path = entry['image']  # example: dataset_merged_split/train/135/135_2_2_1_202_109_1.png
+                filename = os.path.basename(term_img_path)  # example: 135_2_2_1_202_109_1.png
 
-                # Prendi label/ID: parte prima del primo underscore
+                # Label ID = first part before the underscore (identity)
                 label = filename.split('_')[0]
 
-                # Costruisci nome RGB cambiando _1.png in _3.png
+                # Replace _1 with _3 (extension names to distinguish rgb from thermal images by name)
                 if filename.endswith('_1.png'):
                     rgb_filename = filename[:-6] + '_3.png'
                 else:
-                    print(f"Filename inatteso: {filename}")
+                    print(f"Unexpected finename: {filename}")
                     continue
 
                 rgb_src_path = os.path.join(rgb_source_folder, rgb_filename)
                 if not os.path.isfile(rgb_src_path):
-                    print(f"File RGB non trovato: {rgb_src_path}")
+                    print(f"RGB pair not found: {rgb_src_path}")
                     continue
 
-                # Cartella di destinazione es: dataset_merged_split_rgb/train/135/
+                # Dest. folder: dataset_merged_split_rgb/train/135/
                 dst_folder = os.path.join(rgb_target_root, split, label)
                 os.makedirs(dst_folder, exist_ok=True)
 
@@ -47,10 +47,10 @@ def organize_rgb():
 
                 # Copia il file
                 shutil.copy2(rgb_src_path, dst_path)
-                print(f"Copiato {rgb_src_path} -> {dst_path}")
+                print(f"Copied {rgb_src_path} -> {dst_path}")
 
 def create_rgb_jsonl_copy(input_jsonl_path):
-    # costruisci nome file output con _rgb prima dell'estensione
+    # Complete path
     base, ext = os.path.splitext(input_jsonl_path)
     output_jsonl_path = base + '_rgb' + ext
 
@@ -58,12 +58,12 @@ def create_rgb_jsonl_copy(input_jsonl_path):
         for line in fin:
             entry = json.loads(line)
             img_path = entry.get('image', '')
-            # sostituisci _1.png con _3.png nel path
+            # replace _1.png with _3.png in the path if it exists
             if img_path.endswith('_1.png'):
                 img_path = img_path[:-6] + '_3.png'
                 entry['image'] = img_path
             else:
-                # se non finisce con _1.png puoi decidere cosa fare (qui lascio invariato)
+                # Otherwise skip
                 pass
             fout.write(json.dumps(entry) + '\n')
     print(f"Creato file aggiornato: {output_jsonl_path}")
