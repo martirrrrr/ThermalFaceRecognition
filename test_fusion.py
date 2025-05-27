@@ -37,6 +37,7 @@ def load_models(num_classes, device, model_path='best_model_fusion.pth'):
 def load_data():
     transform_thermal = transforms.Compose([
         transforms.Resize((112, 112)),
+        transforms.Grayscale(num_output_channels=1), # se Iron Thermal -> grayscale
         transforms.ToTensor(),
         transforms.Normalize([0.5], [0.5])
     ])
@@ -74,6 +75,7 @@ def get_predictions(model_thermal, model_rgb, fusion_classifier, test_loader, de
             x_thermal, x_rgb, labels = x_thermal.to(device), x_rgb.to(device), labels.to(device)
             feat_t = model_thermal(x_thermal)
             feat_r = model_rgb(x_rgb)
+            # Prediction based on thermal and r features
             outputs = fusion_classifier(feat_t, feat_r)
             preds = torch.argmax(outputs, dim=1)
             probs = torch.softmax(outputs, dim=1)
@@ -107,7 +109,7 @@ def show_misclassified_from_csv(csv_path, max_samples=10):
     misclassified = df[df['ground_truth'] != df['prediction']]
     print(f"\nFound {len(misclassified)} misclassified samples. Showing up to {max_samples}:\n")
     #misclassified.to_csv("misclassified_samples.csv")
-    print(misclassified.head(max_samples))
+    #print(misclassified.head(max_samples))
 
 def print_metrics(true_labels, preds, label_encoder):
     decoded_gt = label_encoder.inverse_transform(true_labels)
@@ -143,7 +145,7 @@ def main():
     print_metrics(true_labels, preds, label_encoder)
     #plot_conf_matrix(true_labels, preds, label_encoder.classes_, normalize=True)
     show_misclassified(test_ds, true_labels, preds, label_encoder.classes_)
-    show_misclassified_from_csv("test_results_fusion.csv", max_samples=67)
+    show_misclassified_from_csv("test_results_fusion.csv", max_samples=50)
 
 if __name__ == "__main__":
     main()
