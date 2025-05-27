@@ -63,8 +63,6 @@ Compared to the standard ResNet architecture, some simplifications have been ado
 
 - The data augmentation was kept simple, including only horizontal flips and slight rotations.
 
-These choices allow greater efficiency while maintaining sufficient expressive capacity for the proposed classification task.
-
 
 Reproducible via summary.py.
 ```
