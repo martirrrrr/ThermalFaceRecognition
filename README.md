@@ -39,7 +39,7 @@ split.py
 create_subdir.py
 best_thermal_model2.pth
 ```
-## HOW TO USE
+## HOW TO USE THERMAL MODEL
 Run training file train.py or test test_fr.py
 ### Train
 ```
@@ -51,7 +51,7 @@ python test_fr.py
 ```
 
 ## NETWORK DETAILS
-The implemented neural network is a simplified architecture inspired by ResNet18, composed of an initial convolution layer followed by three residual layers (each layer contains two BasicBlock blocks), each of which learns increasingly abstract representations of input data. The network works on grayscale images sized to 112×112 and uses initial max pooling, followed by Adaptive Average Pooling and a fully connected final for classification into 142 classes. Residual blocks allow the flow of gradients during backpropagation, improving trainability even on deep nets.
+The implemented neural network is a simplified architecture inspired by ResNet18, composed of an initial convolution layer followed by three residual layers (each layer contains two BasicBlock blocks), each of which learns increasingly abstract representations of input data. The network works on grayscale images sized to 112×112 and uses initial max pooling, followed by Adaptive Average Pooling and a fully connected final for classification into 142 classes.
 
 ### Simplification adopted
 Compared to the standard ResNet architecture, some simplifications have been adopted to reduce computational complexity and adapt the model to the available dataset. In particular:
@@ -120,3 +120,16 @@ CustomResNet                             [32, 142]                 --
 ```
 Auto generated figure of the network.
 ![Model](images/architecture.png)
+
+## HOW TO USE - THERMAL+RGB MODEL 
+Prepare your data and annotations, according to the previous steps then run training file train_fusion.py or test test_fusion.py
+### Train
+```
+python train_fusion.py
+```
+### Test
+```
+python test_fusion.py
+```
+
+
