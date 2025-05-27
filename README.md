@@ -121,6 +121,9 @@ CustomResNet                             [32, 142]                 --
 Auto generated figure of the network.
 ![Model](images/architecture.png)
 
+## NETWORK DETAILS - THERMAL+RGB
+The model was then used as a foundation to develop an architecture composed of two separate ResNet branches, trained independently on thermal and RGB visual data, respectively. After feature extraction, the two inputs are fused at the decision level, where their features are combined in the final layer to predict the class label.
+
 ## HOW TO USE - THERMAL+RGB MODEL 
 Prepare your data and annotations, according to the previous steps then run training file train_fusion.py or test test_fusion.py
 ### Train
