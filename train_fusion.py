@@ -103,11 +103,10 @@ class BasicBlock(nn.Module):
         return F.relu(out)
 
 def check_pairs_integrity(dataset, label_encoder, n=5):
+ # Sanity check for pairs extraction
     print(f"Checking {n} pairs in dataset...")
     for i in range(n):
         (x_thermal, x_rgb), label = dataset[i]
-        # Ricorda: x_thermal e x_rgb sono tensori, ma possiamo ricavare nomi dal dataset.samples
-
         sample = dataset.samples[i]
         thermal_path = sample['image']
         rgb_path = thermal_path.replace('dataset_merged_split', 'dataset_merged_split_rgb').replace('_1.png', '_3.png')
@@ -158,7 +157,6 @@ def evaluate(model_thermal, model_rgb, fusion_classifier, dataloader, criterion,
     return total_loss / len(dataloader.dataset), total_correct / len(dataloader.dataset) * 100
 
 
-# === MAIN ===
 if __name__ == '__main__':
 
     transform_train = ThermalGrayTransform(train=True)
@@ -280,7 +278,7 @@ if __name__ == '__main__':
         val_times.append(val_time)
 
         print(f"Epoch {epoch}: Train Acc {train_acc:.2f}%, Val Acc {val_acc:.2f}%")
-        print(f"⏱️ Training time: {train_time:.2f}s | Validation time: {val_time:.2f}s | Epoch time: {epoch_time:.2f}s")
+        print(f"Training time: {train_time:.2f}s | Validation time: {val_time:.2f}s | Epoch time: {epoch_time:.2f}s")
 
         scheduler.step(val_acc)
 
@@ -292,7 +290,7 @@ if __name__ == '__main__':
                 'model_rgb_state_dict': model_rgb.state_dict(),
                 'fusion_classifier_state_dict': fusion_classifier.state_dict()
             }, 'best_model_fusion.pth')
-            print("✅ Best model saved.")
+            print("Best model saved.")
         else:
             counter += 1
             if counter >= patience:
@@ -304,14 +302,14 @@ if __name__ == '__main__':
     test_loss, test_acc = evaluate(model_thermal, model_rgb, fusion_classifier, test_loader, criterion, device)
     end_test = time.time()
     test_time = end_test - start_test
-    print(f"\n🎯 Test Accuracy: {test_acc:.2f}%")
-    print(f"⏱️ Test evaluation time: {test_time:.2f}s")
+    print(f"\nTest Accuracy: {test_acc:.2f}%")
+    print(f"Test evaluation time: {test_time:.2f}s")
     start_test = time.time()
     test_loss, test_acc = evaluate(model_thermal, model_rgb, fusion_classifier, test_loader, criterion, device)
     end_test = time.time()
     test_time = end_test - start_test
-    print(f"\n🎯 Test Accuracy: {test_acc:.2f}%")
-    print(f"⏱️ Test evaluation time: {test_time:.2f}s")
+    print(f"\nTest Accuracy: {test_acc:.2f}%")
+    print(f"Test evaluation time: {test_time:.2f}s")
 
     # ------------------------ Save metrics ------------------------
     metrics = {
