@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score, precision_score, recall_score
 from face_dataset import FaceDetectionDataset
-from train import CustomResNet  # import your trained model class
+from train import CustomResNet
 from sklearn.preprocessing import LabelEncoder
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
