@@ -12,7 +12,7 @@ import time
 import matplotlib.pyplot as plt
 
 """
-DUAL CUSTOM-RESNET FOR THERMAL IMAGE CLASSIFICATION
+DUAL CUSTOM-RESNET FOR THERMAL FACE CLASSIFICATION
 __________________________________________________________
 Both thermal and visual inputs are processed independently with a 
 lighter custom network based on ResNet for feature extraction.
