@@ -17,9 +17,8 @@ class_names = sorted(os.listdir(original_dir))
 
 for cls_name in class_names:
     original_imgs = [os.path.join(original_dir, cls_name, f) for f in os.listdir(os.path.join(original_dir, cls_name))]
-    #augmented_imgs = [os.path.join(augmented_dir, cls_name, f) for f in os.listdir(os.path.join(augmented_dir, cls_name))]
 
-    all_imgs = original_imgs #+ augmented_imgs
+    all_imgs = original_imgs
     random.shuffle(all_imgs)
 
     n_total = len(all_imgs)
@@ -41,19 +40,19 @@ for cls_name in class_names:
             dst = os.path.join(out_dir, fname)
             shutil.copy2(img_path, dst)
 
-# === DOPO AVER COPIATO LE IMMAGINI, CREA I FILE train_bb.txt / val_bb.txt / test_bb.txt ===
+# Bounding boxes coordinates files
 
 bbox_file = "bounding_boxes.txt"
 bbox_dict = {}
 
-# Leggi bounding_boxes.txt in un dizionario {identities/...: linea completa}
+# Read
 with open(bbox_file, "r") as f:
     for line in f:
         parts = line.strip().split()
         if len(parts) >= 5:
             bbox_dict[parts[0]] = line.strip()
 
-# Scrivi solo le immagini effettivamente presenti nei rispettivi split
+# For each split, the annotation must be placed in the correct jsonl file
 for split in ["train", "val", "test"]:
     txt_path = f"dataset_merged_split/{split}/{split}_bb.txt"
     with open(txt_path, "w") as f_out:
@@ -63,11 +62,10 @@ for split in ["train", "val", "test"]:
             if not os.path.isdir(class_path):
                 continue
             for img_name in os.listdir(class_path):
-                relative_path = f"identities/{class_name}/{img_name}"  # chiave nel bbox_dict
+                relative_path = f"identities/{class_name}/{img_name}" 
                 if relative_path in bbox_dict:
-                    # percorso effettivo dove l’immagine è stata copiata
                     net_path = f"{output_base}/{split}/{class_name}/{img_name}"
-                    # prendi solo le coordinate bbox (dalla seconda colonna in poi)
+                    # only bounding box coordinates
                     coords = " ".join(bbox_dict[relative_path].split()[1:])
                     f_out.write(f"{net_path} {coords}\n")
 
@@ -82,7 +80,7 @@ def bbtxt_to_jsonl(bbtxt_path, jsonl_path):
                 continue
             image_path = parts[0]
             bbox = list(map(int, parts[1:5]))
-            label = image_path.split(os.sep)[-2]  # nome cartella es: '113'
+            label = image_path.split(os.sep)[-2]  # example of folder name: '113'
 
             data = {
                 "image": image_path,
@@ -91,13 +89,13 @@ def bbtxt_to_jsonl(bbtxt_path, jsonl_path):
             }
             f_out.write(json.dumps(data) + "\n")
 
-# Percorsi base
+#  base path
 base_dir = "dataset_merged_split"
 
-# Converti ogni file *_bb.txt in JSONL
+# Convert in json
 for split in ["train", "val", "test"]:
     bbtxt_file = f"{base_dir}/{split}/{split}_bb.txt"
     jsonl_file = f"{base_dir}/{split}.jsonl"
     print(f"Converting {bbtxt_file} -> {jsonl_file}")
     bbtxt_to_jsonl(bbtxt_file, jsonl_file)
-print("✅ JSONL files created.")
+print("JSONL files created.")
